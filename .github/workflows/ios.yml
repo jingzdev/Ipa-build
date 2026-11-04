@@ -1,0 +1,84 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract source files
+        run: |
+          mkdir -p source project
+
+          unzip -q ThreeOneOSFive.zip -d source
+          unzip -q ThreeOneOSFive.xcodeproj.zip -d project
+
+      - name: Locate Xcode project
+        id: locate
+        run: |
+          PROJECT=$(find . -type d -name "*.xcodeproj" -print -quit)
+
+          if [ -z "$PROJECT" ]; then
+            echo "Xcode project not found"
+            exit 1
+          fi
+
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "Found: $PROJECT"
+
+      - name: Select scheme
+        id: scheme
+        run: |
+          PROJECT="${{ steps.locate.outputs.project }}"
+
+          xcodebuild -list -json -project "$PROJECT" > schemes.json
+
+          SCHEME=$(ruby -rjson -e \
+            'puts JSON.parse(File.read("schemes.json"))["project"]["schemes"][0]')
+
+          if [ -z "$SCHEME" ]; then
+            echo "No shared scheme found"
+            exit 1
+          fi
+
+          echo "name=$SCHEME" >> "$GITHUB_OUTPUT"
+
+      - name: Build iOS application
+        run: |
+          xcodebuild \
+            -project "${{ steps.locate.outputs.project }}" \
+            -scheme "${{ steps.scheme.outputs.name }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos \
+            -maxdepth 1 -type d -name "*.app" -print -quit)
+
+          if [ -z "$APP" ]; then
+            echo "Application not found"
+            exit 1
+          fi
+
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+
+          zip -qr ThreeOneOSFive.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThreeOneOSFive-IPA
+          path: ThreeOneOSFive.ipa
+          if-no-files-found: error
