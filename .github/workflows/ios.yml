@@ -1,57 +1,11 @@
-name: Build iOS IPA
+name: Teste
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: macos-latest
-
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
-  - name: Extract ZIP files
-    run: |
-      mkdir -p workspace
-      unzip -oq ThreeOneOSFive.zip -d workspace
-      unzip -oq ThreeOneOSFive.xcodeproj.zip -d workspace
-  - name: Find Xcode project
-    run: |
-      PROJECT=$(find workspace -name "*.xcodeproj" -type d -print -quit)
-      if [ -z "$PROJECT" ]; then
-        echo "Nenhum projeto Xcode encontrado."
-        find workspace -maxdepth 5 -print
-        exit 1
-      fi
-      echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
-  - name: Find scheme
-    run: |
-      xcodebuild -list -json -project "$PROJECT" > schemes.json
-      SCHEME=$(python3 -c 'import json; d=json.load(open("schemes.json")); print(d["project"]["schemes"][0])')
-      echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
-  - name: Build IPA
-    run: |
-      xcodebuild \
-        -project "$PROJECT" \
-        -scheme "$SCHEME" \
-        -configuration Release \
-        -sdk iphoneos \
-        -derivedDataPath build \
-        CODE_SIGNING_ALLOWED=NO \
-        build
-  - name: Package IPA
-    run: |
-      APP=$(find build/Build/Products -type d -name "*.app" -print -quit)
-      if [ -z "$APP" ]; then
-        echo "Aplicativo .app não encontrado."
-        exit 1
-      fi
-      mkdir -p Payload
-      cp -R "$APP" Payload/
-      mkdir -p output
-      zip -qry output/ThreeOneOSFive.ipa Payload
-  - name: Upload IPA
-    uses: actions/upload-artifact@v4
-    with:
-      name: ThreeOneOSFive-IPA
-      path: output/ThreeOneOSFive.ipa
+  teste:
+    runs-on: macos-latest
+    steps:
+      - name: Teste
+        run: echo "Workflow funcionando"
