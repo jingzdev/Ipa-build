@@ -2,84 +2,56 @@ name: Build iOS IPA
 
 on:
 workflow_dispatch:
-push:
-branches:
-- main
-- master
 
 jobs:
 build:
 runs-on: macos-latest
 
 steps:
-  - name: Download repository
+  - name: Checkout repository
     uses: actions/checkout@v4
-  - name: Extract and combine ZIP files
+  - name: Extract ZIP files
     run: |
       mkdir -p workspace
-      test -f ThreeOneOSFive.zip || {
-        echo "ERRO: ThreeOneOSFive.zip não encontrado na raiz."
-        exit 1
-      }
-      test -f ThreeOneOSFive.xcodeproj.zip || {
-        echo "ERRO: ThreeOneOSFive.xcodeproj.zip não encontrado na raiz."
-        exit 1
-      }
       unzip -oq ThreeOneOSFive.zip -d workspace
       unzip -oq ThreeOneOSFive.xcodeproj.zip -d workspace
   - name: Find Xcode project
     run: |
       PROJECT=$(find workspace -name "*.xcodeproj" -type d -print -quit)
       if [ -z "$PROJECT" ]; then
-        echo "ERRO: Não encontrei nenhum arquivo .xcodeproj nos ZIPs."
-        find workspace -maxdepth 4 -print
+        echo "Nenhum projeto Xcode encontrado."
+        find workspace -maxdepth 5 -print
         exit 1
       fi
       echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
-      echo "Projeto encontrado: $PROJECT"
-  - name: Fix missing localization files
-    run: |
-      find workspace -type d -name "*.lproj" | while read DIR; do
-        if [ ! -f "$DIR/Localizable.strings" ]; then
-          touch "$DIR/Localizable.strings"
-        fi
-      done
-  - name: Detect scheme
+  - name: Find scheme
     run: |
       xcodebuild -list -json -project "$PROJECT" > schemes.json
-      SCHEME=$(python3 -c 'import json; d=json.load(open("schemes.json")); s=d["project"]["schemes"]; print(s[0] if s else "")')
-      if [ -z "$SCHEME" ]; then
-        echo "ERRO: Nenhum scheme encontrado."
-        cat schemes.json
-        exit 1
-      fi
+      SCHEME=$(python3 -c 'import json; d=json.load(open("schemes.json")); print(d["project"]["schemes"][0])')
       echo "SCHEME=$SCHEME" >> "$GITHUB_ENV"
-      echo "Scheme encontrado: $SCHEME"
-  - name: Build application
+  - name: Build IPA
     run: |
       xcodebuild \
         -project "$PROJECT" \
         -scheme "$SCHEME" \
         -configuration Release \
         -sdk iphoneos \
-        -destination 'generic/platform=iOS' \
         -derivedDataPath build \
         CODE_SIGNING_ALLOWED=NO \
         build
-  - name: Create IPA
+  - name: Package IPA
     run: |
       APP=$(find build/Build/Products -type d -name "*.app" -print -quit)
       if [ -z "$APP" ]; then
-        echo "ERRO: O aplicativo .app não foi gerado."
+        echo "Aplicativo .app não encontrado."
         exit 1
       fi
       mkdir -p Payload
       cp -R "$APP" Payload/
       mkdir -p output
-      /usr/bin/zip -qry output/ThreeOneOSFive.ipa Payload
+      zip -qry output/ThreeOneOSFive.ipa Payload
   - name: Upload IPA
     uses: actions/upload-artifact@v4
     with:
       name: ThreeOneOSFive-IPA
       path: output/ThreeOneOSFive.ipa
-      if-no-files-found: error
