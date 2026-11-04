@@ -3,7 +3,8 @@ name: Build iOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -16,6 +17,7 @@ jobs:
       - name: Extract source files
         run: |
           mkdir -p source project
+
           unzip -q ThreeOneOSFive.zip -d source
           unzip -q ThreeOneOSFive.xcodeproj.zip -d project
 
@@ -25,25 +27,23 @@ jobs:
           PROJECT=$(find project -type d -name "*.xcodeproj" -print -quit)
 
           if [ -z "$PROJECT" ]; then
-            echo "Xcode project not found"
+            echo "ERROR: Xcode project not found"
             exit 1
           fi
 
           echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "Found: $PROJECT"
+          echo "Found project: $PROJECT"
 
-      - name: Fix missing localization files
+      - name: Fix localization files
         run: |
-          PROJECT="${{ steps.locate.outputs.project }}"
-          SOURCE_DIR="$(dirname "$PROJECT")/ThreeOneOSFive"
+          APP_DIR="project/ThreeOneOSFive"
 
-          mkdir -p "$SOURCE_DIR/zh-Hans.lproj"
-          mkdir -p "$SOURCE_DIR/vi.lproj"
+          for LANG in en vi zh-Hans; do
+            mkdir -p "$APP_DIR/$LANG.lproj"
+            touch "$APP_DIR/$LANG.lproj/Localizable.strings"
+          done
 
-          touch "$SOURCE_DIR/zh-Hans.lproj/Localizable.strings"
-          touch "$SOURCE_DIR/vi.lproj/Localizable.strings"
-
-          echo "Localization files checked."
+          echo "Localization files ready."
 
       - name: Select scheme
         id: scheme
@@ -56,11 +56,12 @@ jobs:
             'puts JSON.parse(File.read("schemes.json"))["project"]["schemes"][0]')
 
           if [ -z "$SCHEME" ]; then
-            echo "No shared scheme found"
+            echo "ERROR: Scheme not found"
             exit 1
           fi
 
           echo "name=$SCHEME" >> "$GITHUB_OUTPUT"
+          echo "Selected scheme: $SCHEME"
 
       - name: Build iOS application
         run: |
@@ -69,6 +70,7 @@ jobs:
             -scheme "${{ steps.scheme.outputs.name }}" \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
@@ -79,13 +81,16 @@ jobs:
             -maxdepth 1 -type d -name "*.app" -print -quit)
 
           if [ -z "$APP" ]; then
-            echo "Application not found"
+            echo "ERROR: Application not found"
             exit 1
           fi
 
           mkdir -p Payload
           cp -R "$APP" Payload/
+
           zip -qr ThreeOneOSFive.ipa Payload
+
+          echo "IPA successfully packaged."
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
