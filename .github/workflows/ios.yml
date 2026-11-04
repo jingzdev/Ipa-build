@@ -16,14 +16,13 @@ jobs:
       - name: Extract source files
         run: |
           mkdir -p source project
-
           unzip -q ThreeOneOSFive.zip -d source
           unzip -q ThreeOneOSFive.xcodeproj.zip -d project
 
       - name: Locate Xcode project
         id: locate
         run: |
-          PROJECT=$(find . -type d -name "*.xcodeproj" -print -quit)
+          PROJECT=$(find project -type d -name "*.xcodeproj" -print -quit)
 
           if [ -z "$PROJECT" ]; then
             echo "Xcode project not found"
@@ -32,6 +31,19 @@ jobs:
 
           echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
           echo "Found: $PROJECT"
+
+      - name: Fix missing localization files
+        run: |
+          PROJECT="${{ steps.locate.outputs.project }}"
+          SOURCE_DIR="$(dirname "$PROJECT")/ThreeOneOSFive"
+
+          mkdir -p "$SOURCE_DIR/zh-Hans.lproj"
+          mkdir -p "$SOURCE_DIR/vi.lproj"
+
+          touch "$SOURCE_DIR/zh-Hans.lproj/Localizable.strings"
+          touch "$SOURCE_DIR/vi.lproj/Localizable.strings"
+
+          echo "Localization files checked."
 
       - name: Select scheme
         id: scheme
@@ -73,7 +85,6 @@ jobs:
 
           mkdir -p Payload
           cp -R "$APP" Payload/
-
           zip -qr ThreeOneOSFive.ipa Payload
 
       - name: Upload IPA
